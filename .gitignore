@@ -1,0 +1,6 @@
+# ignore results of build output
+**/build_output
+
+# ignore ide stuff
+.vscode
+*.swp

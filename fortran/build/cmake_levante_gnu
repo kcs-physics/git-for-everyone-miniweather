@@ -1,0 +1,39 @@
+#!/usr/bin/bash
+#
+# @brief Configures, builds, and runs tests for miniWeather on Levante
+#
+set -eu  # `man set` then search set \[ and look at options
+fortran_project_root="$(dirname $(dirname $(realpath ${BASH_SOURCE[0]})))"
+build_dir="${fortran_project_root}/build"
+build_output_dir="${build_dir}/build_output"
+
+# load dependencies 
+module purge
+module load \
+    gcc/11.2.0-gcc-11.2.0 \
+    openmpi/4.1.2-gcc-11.2.0 \
+    parallel-netcdf/1.12.2-openmpi-4.1.2-gcc-11.2.0 \
+    netcdf-c/main-openmpi-4.1.5-nvhpc-24.7
+
+# configure project 
+PARALLEL_NETCDF_L_LIBDIR="$(pkg-config --libs-only-L pnetcdf)"
+PARALLEL_NETCDF_LIBDIR="${PARALLEL_NETCDF_L_LIBDIR/-L/}"
+cmake \
+    -S "${fortran_project_root}" -B "${build_output_dir}" \
+    -DCMAKE_Fortran_COMPILER=mpif90 \
+    -DFFLAGS="-O3 -ffree-line-length-none -I$(pkg-config --variable=includedir pnetcdf)" \
+    -DLDFLAGS="$(pkg-config --libs pnetcdf) -Wl,-rpath,${PARALLEL_NETCDF_LIBDIR}" \
+    -DOPENACC_FLAGS="-fopenacc" \
+    -DOPENMP_FLAGS="-fopenmp" \
+    -DNX=200 \
+    -DNZ=100 \
+    -DSIM_TIME=1000 \
+    -DOUT_FREQ=2000 
+
+# build executables
+cmake --build "${build_output_dir}"
+
+# perform tests 
+cp "${build_dir}/check_output.sh" "${build_output_dir}"
+cd "${build_output_dir}"
+ctest 
