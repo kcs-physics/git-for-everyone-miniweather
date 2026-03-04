@@ -13,10 +13,16 @@ set -eu
 PROCS_PER_NODE=${PROCS_PER_NODE:-1}           # default to single process job
 export OMP_NUM_THREADS=${OMP_NUM_THREADS:-1}  # default to single threaded job
 default_run_flag="--no-run"
+args="[-h] BUILD_OUTPUT_SUBDIR MINIWEATHER_EXECUTABLE [--run|--no-run]"
 usage=$(cat << EOF
-usage: $0 [-h] MINIWEATHER_EXECUTABLE [--run|--no-run]
+Usage: 
+    bash $0 $args 
+        Run locally (direct execution).
 
-Slurm script for running miniweather simulations.
+    sbatch $0 $args 
+        Submit as a Slurm batch job.
+
+Script for running miniweather simulations.
 
 You should execute this script with bash first to verify that the process and
 thread layout is what you expect. Then if it is what you expect, you MUST
@@ -26,58 +32,72 @@ sbatch with the --run flag. See examples section of this doc.
 IMPORTANT: If you try to execute sbatch outside of the 'run' directory, the job
 WILL fail due to the way paths are derived from the SLURM_SUBMIT_DIR.
 
-required arguments:
+Required arguments:
+    BUILD_OUTPUT_SUBDIR     Name of subdirectory created inside build_output/
     MINIWEATHER_EXECUTABLE  The name of a miniweather executable (e.g., serial).
 
-optional arguments:
+Optional arguments:
     -h
     --help    Print a usage message and exit 
 
     --run
     --no-run  Flag to run miniweather (default: ${default_run_flag})
 
-environment variables:
+Environment variables:
     PROCS_PER_NODE   The number of processes to use on each node (default: ${PROCS_PER_NODE}).
     OMP_NUM_THREADS  The number of threads to use in each process (default: ${OMP_NUM_THREADS}).
 
-examples:
-    # Several examples that will NOT run the miniweather simulation
-    bash $0 serial --no-run                                    # serial
-    OMP_NUM_THREADS=4 bash $0 openmp --no-run                  # openmp only
-    PROCS_PER_NODE=16 bash $0 mpi --no-run                     # mpi only
-    PROCS_PER_NODE=128 OMP_NUM_THREADS=4 bash $0 mpi --no-run  # hybrid parallel
+Examples:
+    # Several examples that WILL NOT run the miniweather simulation
+    bash $0 test serial_test --no-run                                    # serial
+    OMP_NUM_THREADS=4 bash $0 test openmp_test --no-run                  # openmp only
+    PROCS_PER_NODE=16 bash $0 test mpi_test --no-run                     # mpi only
+    PROCS_PER_NODE=128 OMP_NUM_THREADS=4 bash $0 test mpi_test --no-run  # hybrid parallel
 
-    # Several examples that will run the miniweather simulation
+    # Several examples that WILL run the miniweather simulation
     # ONLY if your current working directory is the 'run' directory
-    sbatch $0 serial --run                                    # serial
-    OMP_NUM_THREADS=4 sbatch $0 openmp --run                  # openmp only
-    PROCS_PER_NODE=16 sbatch $0 mpi --run                     # mpi only
-    PROCS_PER_NODE=128 OMP_NUM_THREADS=4 sbatch $0 mpi --run  # hybrid parallel
+    sbatch $0 test serial_test --run                                    # serial
+    OMP_NUM_THREADS=4 sbatch $0 test openmp_test --run                  # openmp only
+    PROCS_PER_NODE=16 sbatch $0 test mpi_test --run                     # mpi only
+    PROCS_PER_NODE=128 OMP_NUM_THREADS=4 sbatch $0 test mpi_test --run  # hybrid parallel
 EOF
 )
 
 # Get arguments
-miniweather_executable=${1:-"does_not_exist"}
+default_required="REQUIRED"
+build_output_subdir_basename="${1:-$default_required}"
+miniweather_executable="${2:-$default_required}"
+run_flag="${3:-$default_run_flag}"
 
-if [[ "${miniweather_executable}" == "does_not_exist" ]]
-then
-    echo "[ERROR] Missing required argument MINIWEATHER_EXECUTABLE"
-    echo "  Try $0 -h"
-    exit 1 
-fi
-
-if [[ "${miniweather_executable}" == "-h" 
-   || "${miniweather_executable}" == "--help" ]]
+if [[ "${build_output_subdir_basename}" == "-h" 
+   || "${build_output_subdir_basename}" == "--help" ]]
 then
     echo "${usage}"
     exit 0
 fi
 
-run_flag=${2:-$default_run_flag}
+# validate args
+if (( OMP_NUM_THREADS > PROCS_PER_NODE ))
+then
+    echo "[WARNING] OMP_NUM_THREADS exceeds PROCS_PER_NODE, this made degrade performance due to thread oversubscription"
+fi
+
+function validate_required_arg() {
+    local required_arg="${1:-$default_required}"
+    if [[ "${required_arg}" == "${default_required}" ]]
+    then
+        echo "[ERROR] Missing required argument"
+        echo "  Try $0 -h"
+        exit 1 
+    fi
+}
+
+validate_required_arg "${build_output_subdir_basename}"
+validate_required_arg "${miniweather_executable}"
 
 if [[ ! "${run_flag}" == "${default_run_flag}" && ! "${run_flag}" == "--run" ]]
 then
-    echo "[ERROR] Second positional argument must be --run or --no-run"
+    echo "[ERROR] Argument must be --run or --no-run"
     echo "  Got ${run_flag}"
     echo "  Try $0 -h"
     exit 1 
@@ -109,7 +129,7 @@ dir_of_cur_file=$(dirname $(realpath "${BASH_SOURCE[0]}"))
 SLURM_SUBMIT_DIR=${SLURM_SUBMIT_DIR:-$dir_of_cur_file}
 fortran_project_dir="$(dirname $(dirname ${SLURM_SUBMIT_DIR}))"
 build_dir="${fortran_project_dir}/build"
-build_output_dir="${build_dir}/build_output"
+build_output_dir="${build_dir}/build_output/${build_output_subdir_basename}"
 miniweather_executable_path="${build_output_dir}/${miniweather_executable}"
 
 if [[ ! -f "${miniweather_executable_path}" ]]

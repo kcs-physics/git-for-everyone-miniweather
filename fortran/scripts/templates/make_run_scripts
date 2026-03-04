@@ -4,14 +4,14 @@ default_account=bm1233
 valid_partitions=("shared" "compute")
 default_partition="compute"
 usage=$(cat << EOF
-usage: $0 [-h] EMAIL [PARTITION] [ACCOUNT]
+Usage: $0 [-h] EMAIL [PARTITION] [ACCOUNT]
 
 Generates user-specific run scripts for miniweather based on existing templates.
 
-required arguments:
+Required arguments:
     EMAIL    The email address to which SLURM status messages are sent.
 
-optional arguments:
+Optional arguments:
     -h
     --help     Print a usage message and exit.
 
@@ -24,7 +24,7 @@ optional arguments:
 
     ACCOUNT    DKRZ account identifier for SLURM jobs (default: ${default_account})
 
-examples:
+Examples:
     $0 -h                                # outputs help information
     $0 myemail@gmail.com                 # specifies valid email address 
     $0 myemail@gmail.com compute         # specifies compute partition
